@@ -12,7 +12,6 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
     struct object_id head_oid, arg_oid;
 
     branch = resolve_refdup("HEAD", 0, &head_oid, NULL);
-
     printf("Head branch = %s, Head commit = %s\n", branch, oid_to_hex(&head_oid));
 
     
