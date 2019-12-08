@@ -33,7 +33,7 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
     struct commit* base_commit;
     struct commit* merge_commit;
     struct merge_options merge_opts;
-    struct commit_list *bases = NULL;
+    const struct object_id *bases[1];
     struct commit *result;
     int clean,i;
    
@@ -57,10 +57,10 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
         merge_opts.ancestor = "constructed merge base";
         merge_opts.branch1 = argv[1];
         merge_opts.branch2 = argv[3];
+        bases[0] = &base_commit->object.oid;
 
         printf("Merging %s .. %s onto %s\n",oid_to_hex(&base_commit->object.oid),oid_to_hex(&merge_commit->object.oid),oid_to_hex(&head_commit->object.oid));
-        commit_list_insert(base_commit, &bases);
-        clean = merge_recursive(&merge_opts,head_commit,merge_commit,bases,&result);
+        clean = merge_recursive_generic(&merge_opts,&head_commit->object.oid,&merge_commit->object.oid,1,bases,&result);
         if (clean < 0) {
             exit(128);
         }
