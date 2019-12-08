@@ -19,6 +19,7 @@
 /git-am
 /git-annotate
 /git-apply
+/git-apply-diff
 /git-archimport
 /git-archive
 /git-bisect
