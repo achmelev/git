@@ -35,7 +35,7 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
     struct merge_options merge_opts;
     const struct object_id *bases[1];
     struct commit *result;
-    int clean,i;
+    int clean;
    
     if (argc == 4) 
     {
@@ -47,12 +47,6 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
         base_commit = get_commit_or_die(argv[2]);
         merge_commit = get_commit_or_die(argv[3]);
         
-        printf("Current repo is %s\n",the_repository->gitdir);
-        for (i = 0; i < the_repository->index->cache_nr; i++) {
-			printf("%s\n", the_repository->index->cache[i]->name);
-		}
-        
-
         init_merge_options(&merge_opts, the_repository);
         merge_opts.ancestor = "constructed merge base";
         merge_opts.branch1 = argv[1];
