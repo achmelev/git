@@ -1,6 +1,7 @@
 #include "builtin.h"
 #include "refs.h"
 #include "cache.h"
+#include "cache-tree.h"
 #include "commit.h"
 #include "merge-recursive.h"
 
@@ -31,13 +32,16 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
     
     const char* branch;
     struct commit* head_commit;
-    struct object_id head_oid;
+    struct object_id head_oid, tree_oid, new_head_oid;
     struct commit* base_commit;
     struct commit* merge_commit;
     struct merge_options merge_opts;
+    struct commit_list *parents = NULL;
     const struct object_id *bases[1];
     struct commit *result;
     int clean;
+    struct strbuf err = STRBUF_INIT;
+    struct ref_transaction *transaction;
    
     if ((argc == 3) || (argc == 2) ) 
     {
@@ -72,7 +76,36 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
         if (clean < 0) {
             exit(128);
         }
-        printf("Result %i\n", clean);
+        if (clean == 0) 
+        {
+            if (write_index_as_tree(&tree_oid, the_repository->index, the_repository->index_file, 0, NULL)) 
+            {
+		        die(_("git write-tree failed to write a tree"));
+            }  
+            commit_list_insert(head_commit, &parents);
+            if (commit_tree_extended("apply-diff", 10, &tree_oid, parents,&new_head_oid, "dummy author", NULL, NULL)) 
+            {
+		         die(_("failed to write commit object"));
+	        }
+
+            transaction = ref_transaction_begin(&err);
+            if (transaction) 
+            {
+                if (ref_transaction_update(transaction, "HEAD", &new_head_oid,&head_commit->object.oid,0, "apply-diff", &err)) 
+                {
+                    die("%s", err.buf);
+                }
+                if (ref_transaction_commit(transaction, &err)) 
+                {
+                   die("%s", err.buf);
+                }    
+                ref_transaction_free(transaction);
+            } else {
+                die("%s", err.buf);
+            }
+	            
+
+        } 
         
     } else {
         die("wrong number of arguments!");
