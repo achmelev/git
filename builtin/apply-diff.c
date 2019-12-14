@@ -6,6 +6,13 @@
 #include "merge-recursive.h"
 #include "sequencer.h"
 #include "parse-options.h"
+#include "strbuf.h"
+
+static const char commit_editor_comment[] =
+N_("Please enter the commit message for your changes. Lines starting\n"
+   "with '%c' will be ignored, and an empty message aborts the commit.\n");
+
+static GIT_PATH_FUNC(edit_apply_diff_commit_msg , "EDIT_APPLY_DIFF_COMMIT_MSG")
 
 char* commit_msg = NULL;
 
@@ -40,6 +47,21 @@ static struct commit *get_commit_or_die(const char *ref_name)
 	}
 	return c;
 }
+
+static void commit_abort(void)
+{
+	error(_("Not committing; use 'git commit' to complete.\n"));
+	exit(1);
+}
+
+static void prepare_commit_msg(void) 
+{
+    struct strbuf commit_msg_buf = STRBUF_INIT;
+
+    strbuf_addch(&commit_msg_buf, '\n');
+    strbuf_commented_addf(&commit_msg_buf, commit_editor_comment,comment_line_char);
+    write_file_buf(edit_apply_diff_commit_msg(),commit_msg_buf.buf, commit_msg_buf.len);
+}    
 
 
 int cmd_apply_diff(int argc, const char **argv, const char *prefix)
@@ -115,7 +137,12 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
             commit_list_insert(head_commit, &parents);
             if (!commit_msg) {
                 commit_msg = "from editor";
-            }
+                prepare_commit_msg();
+                if (launch_editor(edit_apply_diff_commit_msg(), &commit_msg_buf, NULL))
+                {
+			        commit_abort();
+                }
+            }    
             if (commit_tree_extended(commit_msg, strlen(commit_msg), &tree_oid, parents,&new_head_oid, author, NULL, NULL)) 
             {
 		         die(_("failed to write commit object"));
