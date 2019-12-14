@@ -4,6 +4,21 @@
 #include "cache-tree.h"
 #include "commit.h"
 #include "merge-recursive.h"
+#include "sequencer.h"
+#include "parse-options.h"
+
+char* commit_msg = NULL;
+
+static const char * const apply_diff_usage[] = {
+	N_("git apply-diff [<options>] [<from>] [<to>]"),
+	NULL
+};
+
+static struct option apply_diff_options[] = {
+	OPT_STRING('m', "message", &commit_msg, N_("message"),
+		N_("commit message")),
+	OPT_END()
+};
 
 
 static struct commit *get_commit_or_die(const char *ref_name)
@@ -41,9 +56,18 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
     struct commit *result;
     int clean;
     struct strbuf err = STRBUF_INIT;
-    struct ref_transaction *transaction;
+    struct strbuf commit_msg_buf = STRBUF_INIT;
+
+    char* author = "dummy author";
+
+    if (argc == 2 && !strcmp(argv[1], "-h"))
+		usage_with_options(apply_diff_usage, apply_diff_options);
+    
+    argc = parse_options(argc, argv, prefix, apply_diff_options,
+			apply_diff_usage, 0);
+
    
-    if ((argc == 3) || (argc == 2) ) 
+    if ((argc == 1) || (argc == 2) ) 
     {
         
         branch = resolve_refdup("HEAD", 0, &head_oid, NULL);
@@ -57,18 +81,24 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
 
         head_commit = lookup_commit_or_die(&head_oid, "HEAD");
         
-        if (argc == 3) {
-            base_commit = get_commit_or_die(argv[1]);
-            merge_commit = get_commit_or_die(argv[2]);
+        if (argc == 2) {
+            base_commit = get_commit_or_die(argv[0]);
+            merge_commit = get_commit_or_die(argv[1]);
         } else {
             base_commit = head_commit;
-            merge_commit = get_commit_or_die(argv[1]);
+            merge_commit = get_commit_or_die(argv[0]);
         }    
         
         init_merge_options(&merge_opts, the_repository);
         merge_opts.ancestor = "constructed merge base";
-        merge_opts.branch1 = argv[1];
-        merge_opts.branch2 = argv[3];
+        if (argc == 2) {
+            merge_opts.branch1 = argv[0];
+            merge_opts.branch2 = argv[1];
+        } else {
+            merge_opts.branch1 = "HEAD";
+            merge_opts.branch2 = argv[0];
+        }
+        
         bases[0] = &base_commit->object.oid;
 
         printf("Applying the difference %s .. %s \n",oid_to_hex(&base_commit->object.oid),oid_to_hex(&merge_commit->object.oid));
@@ -83,32 +113,22 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
 		        die(_("git write-tree failed to write a tree"));
             }  
             commit_list_insert(head_commit, &parents);
-            if (commit_tree_extended("apply-diff", 10, &tree_oid, parents,&new_head_oid, "dummy author", NULL, NULL)) 
+            if (!commit_msg) {
+                commit_msg = "from editor";
+            }
+            if (commit_tree_extended(commit_msg, strlen(commit_msg), &tree_oid, parents,&new_head_oid, author, NULL, NULL)) 
             {
 		         die(_("failed to write commit object"));
 	        }
-
-            transaction = ref_transaction_begin(&err);
-            if (transaction) 
-            {
-                if (ref_transaction_update(transaction, "HEAD", &new_head_oid,&head_commit->object.oid,0, "apply-diff", &err)) 
-                {
-                    die("%s", err.buf);
-                }
-                if (ref_transaction_commit(transaction, &err)) 
-                {
-                   die("%s", err.buf);
-                }    
-                ref_transaction_free(transaction);
-            } else {
-                die("%s", err.buf);
-            }
-	            
-
+            strbuf_addstr(&commit_msg_buf,commit_msg);
+            if (update_head_with_reflog(head_commit, &new_head_oid, getenv("GIT_REFLOG_ACTION"), &commit_msg_buf,&err)) {
+		        die("%s", err.buf);
+	        }
+            print_commit_summary(the_repository, NULL, &new_head_oid,SUMMARY_SHOW_AUTHOR_DATE);
         } 
         
     } else {
-        die("wrong number of arguments!");
+        usage_with_options(apply_diff_usage, apply_diff_options);
     }
 
 	return 0;   
