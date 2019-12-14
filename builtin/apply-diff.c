@@ -48,12 +48,6 @@ static struct commit *get_commit_or_die(const char *ref_name)
 	return c;
 }
 
-static void commit_abort(void)
-{
-	error(_("Not committing; use 'git commit' to complete.\n"));
-	exit(1);
-}
-
 static void prepare_commit_msg(void) 
 {
     struct strbuf commit_msg_buf = STRBUF_INIT;
@@ -61,7 +55,22 @@ static void prepare_commit_msg(void)
     strbuf_addch(&commit_msg_buf, '\n');
     strbuf_commented_addf(&commit_msg_buf, commit_editor_comment,comment_line_char);
     write_file_buf(edit_apply_diff_commit_msg(),commit_msg_buf.buf, commit_msg_buf.len);
-}    
+} 
+
+static void check_conflicts_and_dirty_index(void)
+{
+	struct strbuf sb = STRBUF_INIT;
+    if (repo_read_index_unmerged(the_repository))
+    {
+        die_resolve_conflict("apply-diff");
+    } 
+
+    if (repo_index_has_changes(the_repository, NULL, &sb)) {
+	    error(_("your local changes would be overwritten by %s."),"apply-diff");
+        advise(_("commit your changes or stash them to proceed."));
+        exit(1);
+    }    
+}
 
 
 int cmd_apply_diff(int argc, const char **argv, const char *prefix)
@@ -95,12 +104,7 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
         branch = resolve_refdup("HEAD", 0, &head_oid, NULL);
         if (!branch)
             die("apply-diff doesn't work (yet) on a detached HEAD");
-        
-        if (repo_read_index_unmerged(the_repository))
-        {
-		    die_resolve_conflict("apply-diff");
-        }    
-
+    
         head_commit = lookup_commit_or_die(&head_oid, "HEAD");
         
         if (argc == 2) {
@@ -110,7 +114,9 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
             base_commit = head_commit;
             merge_commit = get_commit_or_die(argv[0]);
         }    
-        
+
+        check_conflicts_and_dirty_index();
+
         init_merge_options(&merge_opts, the_repository);
         merge_opts.ancestor = "constructed merge base";
         if (argc == 2) {
@@ -126,6 +132,7 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
         printf("Applying the difference %s .. %s \n",oid_to_hex(&base_commit->object.oid),oid_to_hex(&merge_commit->object.oid));
         clean = merge_recursive_generic(&merge_opts,&head_commit->object.oid,&merge_commit->object.oid,1,bases,&result);
         if (clean < 0) {
+            die(_("appy-diff failed"));
             exit(128);
         }
         if (clean == 0) 
@@ -136,12 +143,18 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
             }  
             commit_list_insert(head_commit, &parents);
             if (!commit_msg) {
-                commit_msg = "from editor";
                 prepare_commit_msg();
                 if (launch_editor(edit_apply_diff_commit_msg(), &commit_msg_buf, NULL))
                 {
-			        commit_abort();
+			        error(_("Not committing; use 'git commit' to complete.\n"));
+	                exit(1);
                 }
+                strbuf_stripspace(&commit_msg_buf,1);
+                if (commit_msg_buf.len == 0) {
+                    error(_("Aborting commit due to empty commit message.\n"));
+                    exit(1);
+                }
+                commit_msg = commit_msg_buf.buf;
             }    
             if (commit_tree_extended(commit_msg, strlen(commit_msg), &tree_oid, parents,&new_head_oid, author, NULL, NULL)) 
             {
