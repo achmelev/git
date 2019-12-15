@@ -15,8 +15,9 @@ N_("Please enter the commit message for your changes. Lines starting\n"
 static GIT_PATH_FUNC(edit_apply_diff_commit_msg , "EDIT_APPLY_DIFF_COMMIT_MSG")
 
 //options
-char* commit_msg = NULL;
-int no_commit = 0;
+static char* commit_msg = NULL;
+static int no_commit = 0;
+static int signoff;
 
 static const char * const apply_diff_usage[] = {
 	N_("git apply-diff [<options>] [<from>] [<to>]"),
@@ -27,6 +28,7 @@ static struct option apply_diff_options[] = {
 	OPT_STRING('m', "message", &commit_msg, N_("message"),
 		N_("commit message")),
     OPT_BOOL('n', "no-commit", &no_commit, N_("don't automatically commit")),
+    OPT_BOOL('s', "signoff", &signoff, N_("add Signed-off-by:")),
 	OPT_END()
 };
 
@@ -142,9 +144,11 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
             {
 		        die(_("git write-tree failed to write a tree"));
             }  
-            if (!no_commit) {
+            if (!no_commit) 
+            {
                 commit_list_insert(head_commit, &parents);
-                if (!commit_msg) {
+                if (!commit_msg) 
+                {
                     prepare_commit_msg();
                     if (launch_editor(edit_apply_diff_commit_msg(), &commit_msg_buf, NULL))
                     {
@@ -152,13 +156,18 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
                         exit(1);
                     }
                     strbuf_stripspace(&commit_msg_buf,1);
-                    if (commit_msg_buf.len == 0) {
-                        error(_("Aborting commit due to empty commit message.\n"));
-                        exit(1);
-                    }
-                    commit_msg = commit_msg_buf.buf;
-                }    
-                if (commit_tree_extended(commit_msg, strlen(commit_msg), &tree_oid, parents,&new_head_oid, NULL, NULL, NULL)) 
+                } else 
+                {
+                    strbuf_addstr(&commit_msg_buf,commit_msg);
+                }   
+                if (commit_msg_buf.len == 0) 
+                {
+                    error(_("Aborting commit due to empty commit message.\n"));
+                    exit(1);
+                } 
+                if (signoff)
+		            append_signoff(&commit_msg_buf, ignore_non_trailer(commit_msg_buf.buf, commit_msg_buf.len), 0);
+                if (commit_tree_extended(commit_msg_buf.buf, commit_msg_buf.len, &tree_oid, parents,&new_head_oid, NULL, NULL, NULL)) 
                 {
                     die(_("failed to write commit object"));
                 }
