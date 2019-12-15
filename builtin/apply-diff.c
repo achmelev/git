@@ -89,8 +89,6 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
     struct strbuf err = STRBUF_INIT;
     struct strbuf commit_msg_buf = STRBUF_INIT;
 
-    char* author = "dummy author";
-
     if (argc == 2 && !strcmp(argv[1], "-h"))
 		usage_with_options(apply_diff_usage, apply_diff_options);
     
@@ -156,7 +154,7 @@ int cmd_apply_diff(int argc, const char **argv, const char *prefix)
                 }
                 commit_msg = commit_msg_buf.buf;
             }    
-            if (commit_tree_extended(commit_msg, strlen(commit_msg), &tree_oid, parents,&new_head_oid, author, NULL, NULL)) 
+            if (commit_tree_extended(commit_msg, strlen(commit_msg), &tree_oid, parents,&new_head_oid, NULL, NULL, NULL)) 
             {
 		         die(_("failed to write commit object"));
 	        }
